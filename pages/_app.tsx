@@ -1,17 +1,19 @@
 import 'antd/dist/antd.css';
 import '../styles/globals.css';
 import type { AppProps } from 'next/app';
-import { ApolloClient, InMemoryCache, ApolloProvider } from '@apollo/client';
+import { FirebaseProvider } from 'components/firebase-provider';
+import { DraftGroupProvider } from 'components/draft-group-provider';
+import {LoginProvider} from '@/components/login-provider';
 
-const client = new ApolloClient({
-  uri: 'https://beta.pokeapi.co/graphql/v1beta',
-  cache: new InMemoryCache(),
-})
 function MyApp({ Component, pageProps }: AppProps) {
   return (
-    <ApolloProvider client={client}>
-      <Component {...pageProps} />
-    </ApolloProvider>
+    <FirebaseProvider>
+      <LoginProvider>
+        <DraftGroupProvider>
+          <Component {...pageProps} />
+        </DraftGroupProvider>
+      </LoginProvider>
+    </FirebaseProvider>
   )
 }
 

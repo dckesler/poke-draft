@@ -1,3 +1,8 @@
+@font-face {
+  font-family: "8-BIT";
+  src: url("/assets/fonts/8-BIT.ttf")
+}
+
 html,
 body {
   padding: 0;
@@ -13,4 +18,6 @@ a {
 
 * {
   box-sizing: border-box;
+  font-family: "8-BIT";
 }
+
