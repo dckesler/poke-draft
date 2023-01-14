@@ -7,6 +7,7 @@ type PlayerDrafts = {
   [player: number]: Pokemon[],
 }
 
+// TODO: Take the draft logic to the DraftGroupProvider
 export function useDraft(version: Version, playerCount: number) {
   const onDeckSize = 4;
 

@@ -1,10 +1,6 @@
 import { createContext, FC, ReactNode } from 'react'
 import { initializeApp, FirebaseApp } from 'firebase/app';
-import { getDatabase, ref, set, Database } from 'firebase/database';
-import { Pokemon } from "types/pokemon";
-import { Player } from 'types/player';
-import { DraftGroupStatuses, DraftGroup } from 'types/draft-group'
-import { DraftGroupActionTypes, DraftGroupAction } from 'types/draft-group';
+import { getDatabase, Database } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB2X2UOjX_9-G8nlt45BiLQt3gnxdUXxeo",
@@ -19,18 +15,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
-
-const initDraftGroup: DraftGroup = {
-    hostPlayer: null,
-    browserPlayer: null,
-    players: [],
-    playerDrafts: {},
-    draftingPlayer: null,
-    onDeck: [],
-    status: DraftGroupStatuses.WAITING,
-}
-
-
 
 type FirebaseContextValues = readonly [FirebaseApp, Database];
 

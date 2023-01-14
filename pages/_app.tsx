@@ -3,13 +3,16 @@ import '../styles/globals.css';
 import type { AppProps } from 'next/app';
 import { FirebaseProvider } from 'components/firebase-provider';
 import { DraftGroupProvider } from 'components/draft-group-provider';
+import {LoginProvider} from '@/components/login-provider';
 
 function MyApp({ Component, pageProps }: AppProps) {
   return (
     <FirebaseProvider>
-      <DraftGroupProvider>
-        <Component {...pageProps} />
-      </DraftGroupProvider>
+      <LoginProvider>
+        <DraftGroupProvider>
+          <Component {...pageProps} />
+        </DraftGroupProvider>
+      </LoginProvider>
     </FirebaseProvider>
   )
 }

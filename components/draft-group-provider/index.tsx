@@ -1,6 +1,8 @@
 import { useEffect, createContext, FC, ReactNode, useCallback, useContext, useState, useMemo } from "react";
-import { get, ref, set, onValue, off } from "firebase/database";
+import { get, ref, set, onValue, off, DatabaseReference } from "firebase/database";
 import { drafts } from 'data/draft-lists/index';
+import { useRouter } from "next/router";
+import { v4 as uuid } from "uuid";
 
 import {
   DraftGroup,
@@ -17,8 +19,8 @@ type DraftGroupProviderProps = {
 };
 
 type DraftGroupDispatcher = <
-Type extends keyof DraftGroupActionsMap,
-Payload extends DraftGroupActionsMap[Type]
+  Type extends keyof DraftGroupActionsMap,
+  Payload extends DraftGroupActionsMap[Type]
 >(
   type: Type,
   // This line makes it so if there shouldn't be a payload then
@@ -28,10 +30,12 @@ Payload extends DraftGroupActionsMap[Type]
 ) => Promise<void>;
 
 const emptyDraftGroup: DraftGroup = {
+  id: '',
+  name: '',
   browserPlayer: null,
   hostPlayer: null,
   draftingPlayer: null,
-  players: [],
+  players: {},
   playerDrafts: {},
   onDeck: [],
   status: DraftGroupStatuses.WAITING,
@@ -42,13 +46,11 @@ const emptyDraftGroup: DraftGroup = {
 type DGC = {
   draftGroup: DraftGroup,
   dispatch: DraftGroupDispatcher,
-  draftGroupId: string | null,
 }
 
 export const DraftGroupContext = createContext<DGC>({
   draftGroup: emptyDraftGroup,
   dispatch: async () => {},
-  draftGroupId: null,
 });
 
 export const DraftGroupProvider: FC<DraftGroupProviderProps> = ({
@@ -56,27 +58,35 @@ export const DraftGroupProvider: FC<DraftGroupProviderProps> = ({
 }) => {
   const [fbApp, fbDatabase] = useContext(FirebaseContext);
   const [draftGroup, setDraftGroup] = useState<DraftGroup>(emptyDraftGroup);
-  const [draftGroupId, setDraftGroupId] = useState<string | null>(null);
+  const [draftSubRef, setDraftSubRef] = useState<DatabaseReference | null>(null);
+  const router = useRouter()
 
-  const setCloudData = useCallback(async (state: CloudDraftGroup) => {
-    if (!draftGroupId) {
-      throw new Error('Attempted to set cloud data without draft group ID');
-    }
-    const cloudUrl = `/draft-groups/${draftGroupId}`;
-    const draftRef = ref(fbDatabase, cloudUrl);
-    set(draftRef, state);
-  }, [draftGroupId, fbDatabase])
-
-  const getCloudData = useCallback<() => Promise<CloudDraftGroup>>(async () => {
-    if (!draftGroupId) {
-      throw new Error('Attempted to get cloud data without draft group ID');
-    }
-    const cloudUrl = `/draft-groups/${draftGroupId}`;
+  const getCloudData = useCallback<(id: string) => Promise<CloudDraftGroup>>(async (id: string) => {
+    const cloudUrl = `/draft-groups/${id}`;
     const draftRef = ref(fbDatabase, cloudUrl);
     const snapshot = await get(draftRef);
     const data = snapshot.val() as CloudDraftGroup;
     return data;
-  }, [draftGroupId, fbDatabase])
+  }, [fbDatabase])
+
+  const subscribeToDraft = useCallback(async (id: string) => {
+    if (draftSubRef) {
+      off(draftSubRef)
+    }
+  //
+    const cloudUrl = `/draft-groups/${id}`;
+    const newRef = ref(fbDatabase, cloudUrl);
+    onValue(newRef, (snapshot) => {
+      const data = snapshot.val() as CloudDraftGroup;
+      if (data) {
+        setDraftGroup({
+          ...data,
+          browserPlayer: draftGroup.browserPlayer
+        })
+      }
+    })
+    setDraftSubRef(newRef)
+  }, [fbDatabase])
 
   const dispatch = useCallback<DraftGroupDispatcher>(
     (_type, ..._payload) => {
@@ -85,19 +95,20 @@ export const DraftGroupProvider: FC<DraftGroupProviderProps> = ({
         const action = { type: _type, payload: _payload[0] } as DraftGroupAction
         const { type, payload } = action;
 
-        if (type === DraftGroupActionTypes.SET_DRAFT_GROUP_ID) {
-          if (draftGroupId !== payload) {
-            setDraftGroup(emptyDraftGroup);
-            setDraftGroupId(payload);
-          }
-        }
+        if (type === DraftGroupActionTypes.CREATE_DRAFT_GROUP) {
+          const newDraftId = uuid()
+          const cloudUrl = `/draft-groups/${newDraftId}`;
+          const draftRef = ref(fbDatabase, cloudUrl);
 
-        else if (type === DraftGroupActionTypes.CREATE_DRAFT_GROUP) {
-          const { hostPlayer, version } = payload;
+          const { hostPlayer, version, name } = payload;
           const newState = {
+            id: newDraftId,
+            name,
             version: version,
             hostPlayer: hostPlayer,
-            players: [hostPlayer],
+            players: {
+              [hostPlayer.id]: hostPlayer
+            },
             playerDrafts: {
               [hostPlayer.id]: [],
             },
@@ -106,53 +117,46 @@ export const DraftGroupProvider: FC<DraftGroupProviderProps> = ({
             status: 'waiting',
             availableMons: drafts[version],
           }
-          await setCloudData(newState);
+          await set(draftRef, newState);
           setDraftGroup({
             ...newState,
             browserPlayer: hostPlayer,
           });
+          router.push(`/draft/${newDraftId}`)
         }
 
         else if (type === DraftGroupActionTypes.JOIN_DRAFT_GROUP) {
-          const cloudDraft = await getCloudData();
+          const { id, playerId } = payload;
+          const cloudUrl = `/draft-groups/${id}`;
+          let cloudDraft = await getCloudData(id);
           if (!cloudDraft) throw new Error('Attempted to join non-existant draft group');
+
+          let player = cloudDraft.players[playerId]
+          if (!player) {
+            const playerUrl = `${cloudUrl}/players/${playerId}`
+            const playerRef = ref(fbDatabase, playerUrl)
+            await set(playerRef, {
+              id: playerId,
+              name: 'New Player',
+              status: 'connected'
+            })
+            cloudDraft = await getCloudData(id);
+          }
+
           setDraftGroup({
             ...cloudDraft,
-            browserPlayer: payload,
+            browserPlayer: player,
           });
-        }
-
-        else if (type === DraftGroupActionTypes.CLOUD_UPDATE) {
-          setDraftGroup((state) => ({
-            ...payload,
-            browserPlayer:state.browserPlayer
-          }));
+          subscribeToDraft(id)
         }
       })();
 
     },
-    [setCloudData, getCloudData, draftGroupId]
+    [getCloudData]
   );
 
-  // Cloud DB listener
-  useEffect(() => {
-    if (!draftGroupId) return;
-
-    const cloudUrl = `/draft-groups/${draftGroupId}`;
-    const draftGroupRef = ref(fbDatabase, cloudUrl);
-    onValue(draftGroupRef, (snapshot) => {
-      const data = snapshot.val() as CloudDraftGroup;
-      if (data) {
-        dispatch(DraftGroupActionTypes.CLOUD_UPDATE, data);
-      }
-    })
-    return () => {
-      off(draftGroupRef);
-    }
-  }, [fbDatabase, dispatch, draftGroupId])
-
   return (
-    <DraftGroupContext.Provider value={{draftGroup, dispatch, draftGroupId}}>
+    <DraftGroupContext.Provider value={{draftGroup, dispatch}}>
       {children}
     </DraftGroupContext.Provider>
   );

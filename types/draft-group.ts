@@ -8,11 +8,15 @@ export const DraftGroupStatuses = {
 }
 
 export type DraftGroup = {
+  id: string;
+  name: string;
   browserPlayer: Player | null;
   hostPlayer: Player | null;
-  players: Player[];
+  players: {
+    [uid: string]: Player
+  };
   playerDrafts: {
-    [player: number]: Pokemon[];
+    [player: string]: Pokemon[];
   };
   draftingPlayer: Player | null;
   onDeck: Pokemon[];
@@ -24,7 +28,6 @@ export type DraftGroup = {
 export type CloudDraftGroup = Omit<DraftGroup, 'browserPlayer'>
 
 export enum DraftGroupActionTypes {
-  SET_DRAFT_GROUP_ID = "SET_DRAFT_GROUP_ID",
   PLAYER_CONNECTED = "PLAYER_CONNECTED",
   PLAYER_DISCONNECTED = "PLAYER_DISCONNECTED",
   SET_BROWSER_PLAYER = "SET_BROWSER_PLAYER",
@@ -32,21 +35,22 @@ export enum DraftGroupActionTypes {
   CREATE_DRAFT_GROUP = "CREATE_DRAFT_GROUP",
   JOIN_DRAFT_GROUP = "JOIN_DRAFT_GROUP",
   REMOVE_DRAFT_GROUP = "REMOVE_DRAFT_GROUP",
-  CLOUD_UPDATE = "CLOUD_UPDATE",
 }
 
 export type DraftGroupActionsMap = {
-  [DraftGroupActionTypes.SET_DRAFT_GROUP_ID]: string;
   [DraftGroupActionTypes.PLAYER_CONNECTED]: Player;
   [DraftGroupActionTypes.PLAYER_DISCONNECTED]: Player;
   [DraftGroupActionTypes.SET_BROWSER_PLAYER]: Player;
   [DraftGroupActionTypes.CREATE_DRAFT_GROUP]: {
     hostPlayer: Player;
     version: Version;
+    name: string;
   };
-  [DraftGroupActionTypes.JOIN_DRAFT_GROUP]: Player;
+  [DraftGroupActionTypes.JOIN_DRAFT_GROUP]: {
+    playerId: string;
+    id: string;
+  };
   [DraftGroupActionTypes.REMOVE_DRAFT_GROUP]: undefined;
-  [DraftGroupActionTypes.CLOUD_UPDATE]: CloudDraftGroup;
 }
 
 export type DraftGroupAction = {
